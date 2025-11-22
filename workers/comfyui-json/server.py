@@ -1,7 +1,7 @@
 import os
 import logging
 import dataclasses
-import base64
+import aiohttp
 from typing import Optional, Union, Type
 
 from aiohttp import web, ClientResponse
@@ -29,7 +29,6 @@ logging.basicConfig(
     datefmt="%Y-%m-%d %H:%M:%S",
 )
 log = logging.getLogger(__file__)
-
 
 async def generate_client_response(
         client_request: web.Request, model_response: ClientResponse
@@ -86,6 +85,31 @@ class ComfyWorkflowHandler(EndpointHandler[ComfyWorkflowData]):
         return await generate_client_response(client_request, model_response)
 
 
+@dataclasses.dataclass
+class ComfyWorkflowAsyncHandler(EndpointHandler[ComfyWorkflowData]):
+    """Handler for async image generation - returns run_id immediately"""
+
+    @property
+    def endpoint(self) -> str:
+        return "/generate"  # ai-dock's async endpoint
+
+    @property
+    def healthcheck_endpoint(self) -> Optional[str]:
+        return f"{MODEL_SERVER_URL}/health"
+
+    @classmethod
+    def payload_cls(cls) -> Type[ComfyWorkflowData]:
+        return ComfyWorkflowData
+
+    def make_benchmark_payload(self) -> ComfyWorkflowData:
+        return ComfyWorkflowData.for_test()
+
+    async def generate_client_response(
+        self, client_request: web.Request, model_response: ClientResponse
+    ) -> Union[web.Response, web.StreamResponse]:
+        return await generate_client_response(client_request, model_response)
+
+
 backend = Backend(
     model_server_url=MODEL_SERVER_URL,
     model_log_file=os.environ["MODEL_LOG"],
@@ -108,8 +132,109 @@ async def handle_ping(_):
     return web.Response(body="pong")
 
 
+async def handle_async_generate(request: web.Request):
+    """
+    Handle async generation requests by forwarding to ai-dock's /generate endpoint.
+    The ai-dock ComfyUI API Wrapper handles async processing and webhooks.
+    """
+    try:
+        # Parse request body
+        data = await request.json()
+        
+        # Forward directly to ai-dock's /generate endpoint (async)
+        # ai-dock will return immediately with request_id and handle webhooks
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{MODEL_SERVER_URL}/generate",
+                json=data,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                # Return ai-dock's response (contains request_id/run_id)
+                result = await response.json()
+                
+                log.info(f"Async job queued with id: {result.get('id', 'unknown')}")
+                
+                return web.json_response(
+                    result,
+                    status=response.status
+                )
+        
+    except Exception as e:
+        log.error(f"Error handling async request: {e}")
+        return web.json_response(
+            {"error": str(e)},
+            status=500
+        )
+
+
+async def handle_job_status(request: web.Request):
+    """
+    Get status of an async job by forwarding to ai-dock's result endpoint.
+    """
+    request_id = request.match_info.get("run_id")
+    
+    try:
+        # Forward to ai-dock's result endpoint
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                f"{MODEL_SERVER_URL}/result/{request_id}",
+                timeout=aiohttp.ClientTimeout(total=10)
+            ) as response:
+                result = await response.json()
+                return web.json_response(
+                    result,
+                    status=response.status
+                )
+    except Exception as e:
+        log.error(f"Error getting job status: {e}")
+        return web.json_response(
+            {"error": str(e)},
+            status=500
+        )
+
+
+async def handle_stream_generate(request: web.Request):
+    """
+    Handle streaming generation requests by forwarding to ai-dock's /generate/stream endpoint.
+    Returns Server-Sent Events (SSE) with real-time progress updates.
+    """
+    try:
+        data = await request.json()
+        
+        # Forward to ai-dock's streaming endpoint
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{MODEL_SERVER_URL}/generate/stream",
+                json=data,
+                timeout=aiohttp.ClientTimeout(total=None)  # No timeout for streaming
+            ) as response:
+                # Stream the response back to client
+                stream_response = web.StreamResponse()
+                stream_response.content_type = 'text/event-stream'
+                stream_response.headers['Cache-Control'] = 'no-cache'
+                stream_response.headers['X-Accel-Buffering'] = 'no'
+                
+                await stream_response.prepare(request)
+                
+                async for chunk in response.content.iter_any():
+                    await stream_response.write(chunk)
+                
+                await stream_response.write_eof()
+                return stream_response
+                
+    except Exception as e:
+        log.error(f"Error handling stream request: {e}")
+        return web.json_response(
+            {"error": str(e)},
+            status=500
+        )
+
+
 routes = [
     web.post("/generate/sync", backend.create_handler(ComfyWorkflowHandler())),
+    web.post("/generate/async", handle_async_generate),
+    web.post("/generate/stream", handle_stream_generate),
+    web.get("/result/{run_id}", handle_job_status),
     web.get("/ping", handle_ping),
 ]
 
