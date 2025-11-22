@@ -232,7 +232,7 @@ async def handle_stream_generate(request: web.Request):
 
 routes = [
     web.post("/generate/sync", backend.create_handler(ComfyWorkflowHandler())),
-    web.post("/generate/async", handle_async_generate),
+    web.post("/generate/async", backend.create_handler(ComfyWorkflowAsyncHandler())),
     web.post("/generate/stream", handle_stream_generate),
     web.get("/result/{run_id}", handle_job_status),
     web.get("/ping", handle_ping),
