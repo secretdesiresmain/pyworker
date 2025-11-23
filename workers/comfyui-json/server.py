@@ -174,7 +174,7 @@ async def handle_async_generate(request: web.Request):
                 
                 return web.json_response(
                     result,
-                    status=response.status
+                    status=200
                 )
         
     except Exception as e:
