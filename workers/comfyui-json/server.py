@@ -122,10 +122,10 @@ class ComfyWorkflowAsyncHandler(EndpointHandler[ComfyWorkflowData]):
     def make_benchmark_payload(self) -> ComfyWorkflowData:
         return ComfyWorkflowData.for_test()
 
-    async def generate_async_client_response(
+    async def generate_client_response(
         self, client_request: web.Request, model_response: ClientResponse
     ) -> Union[web.Response, web.StreamResponse]:
-        return await generate_client_response(client_request, model_response)
+        return await generate_async_client_response(client_request, model_response)
 
 
 backend = Backend(
