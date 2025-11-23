@@ -171,7 +171,7 @@ async def handle_async_generate(request: web.Request):
                 result = await response.json()
                 log.info(f"Result: {result}")
                 log.info(f"Async job queued with id: {result.get('id', 'unknown')}")
-                
+                log.info(f"200 response")
                 return web.json_response(
                     result,
                     status=200
