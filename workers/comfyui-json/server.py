@@ -68,9 +68,10 @@ async def generate_async_client_response(
         result = await model_response.json()
         log.info(f"Result: {result}")
         log.info(f"Async job queued with id: {result.get('id', 'unknown')}")
+        log.info(f"200 response")
         return web.json_response(
             result,
-            status=model_response.status
+            status=200
         )
     except Exception as e:
         log.error(f"Error generating async client response: {e}")
