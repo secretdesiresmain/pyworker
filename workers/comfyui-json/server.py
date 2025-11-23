@@ -61,6 +61,24 @@ async def generate_client_response(
             )
             
 
+async def generate_async_client_response(
+    client_request: web.Request, model_response: ClientResponse
+) -> Union[web.Response, web.StreamResponse]:
+    try: 
+        result = await model_response.json()
+        log.info(f"Result: {result}")
+        log.info(f"Async job queued with id: {result.get('id', 'unknown')}")
+        return web.json_response(
+            result,
+            status=model_response.status
+        )
+    except Exception as e:
+        log.error(f"Error generating async client response: {e}")
+        return web.json_response(
+            {"error": str(e)},
+            status=500
+        )
+
 @dataclasses.dataclass
 class ComfyWorkflowHandler(EndpointHandler[ComfyWorkflowData]):
 
@@ -104,7 +122,7 @@ class ComfyWorkflowAsyncHandler(EndpointHandler[ComfyWorkflowData]):
     def make_benchmark_payload(self) -> ComfyWorkflowData:
         return ComfyWorkflowData.for_test()
 
-    async def generate_client_response(
+    async def generate_async_client_response(
         self, client_request: web.Request, model_response: ClientResponse
     ) -> Union[web.Response, web.StreamResponse]:
         return await generate_client_response(client_request, model_response)
@@ -151,7 +169,7 @@ async def handle_async_generate(request: web.Request):
             ) as response:
                 # Return ai-dock's response (contains request_id/run_id)
                 result = await response.json()
-                
+                log.info(f"Result: {result}")
                 log.info(f"Async job queued with id: {result.get('id', 'unknown')}")
                 
                 return web.json_response(
