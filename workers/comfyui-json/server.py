@@ -160,6 +160,7 @@ async def handle_async_generate(request: web.Request):
         # Parse request body
         data = await request.json()
         
+        log.info(f"Craig async generate input request : {data}")
         # Forward directly to ai-dock's /generate endpoint (async)
         # ai-dock will return immediately with request_id and handle webhooks
         async with aiohttp.ClientSession() as session:
