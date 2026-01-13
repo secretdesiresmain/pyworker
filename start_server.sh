@@ -29,6 +29,7 @@ function echo_var(){
 
 
 echo "start_server.sh"
+echo "Custom PY Worker start_server.sh"
 date
 
 echo_var BACKEND
