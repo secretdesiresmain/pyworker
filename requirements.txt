@@ -8,4 +8,4 @@ Requests~=2.32
 transformers~=4.52
 utils==1.0.*
 hf_transfer>=0.1.9
-vastai-sdk>=0.2.0
+vastai-sdk==0.4.2.dev1
